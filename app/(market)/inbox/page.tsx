@@ -9,7 +9,7 @@ interface MessageThread {
   listing_id: string;
   body: string;
   created_at: string;
-  listings?: { title: string };
+  listings?: { title: string }[];
 }
 
 export default function InboxPage() {
@@ -28,7 +28,7 @@ export default function InboxPage() {
       .or(`sender_id.eq.${auth.user.id},receiver_id.eq.${auth.user.id}`)
       .order('created_at', { ascending: false })
       .limit(50);
-    setMessages((data as MessageThread[]) ?? []);
+    setMessages(data ?? []);
   };
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function InboxPage() {
         <div className="space-y-2">
           {messages.map((msg) => (
             <article key={msg.id} className="card p-3 text-sm">
-              <p className="text-xs text-gray-600">Listing: {msg.listings?.title ?? msg.listing_id}</p>
+              <p className="text-xs text-gray-600">Listing: {msg.listings?.[0]?.title ?? msg.listing_id}</p>
               <p>{msg.body}</p>
               <p className="text-xs text-gray-500">{new Date(msg.created_at).toLocaleString()}</p>
             </article>
