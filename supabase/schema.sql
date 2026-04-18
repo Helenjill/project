@@ -107,10 +107,6 @@ on public.profiles for update
 using (auth.uid() = id)
 with check (auth.uid() = id);
 
-create policy "users can delete own profile"
-on public.profiles for delete
-using (auth.uid() = id);
-
 create policy "users can insert own profile"
 on public.profiles for insert
 with check (
@@ -133,10 +129,6 @@ create policy "users can edit own listings"
 on public.listings for update
 using (auth.uid() = seller_id)
 with check (auth.uid() = seller_id);
-
-create policy "users can delete own listings"
-on public.listings for delete
-using (auth.uid() = seller_id);
 
 create policy "listing images viewable by everyone"
 on public.listing_images for select
@@ -175,10 +167,6 @@ create policy "seller can update offer status"
 on public.offers for update
 using (auth.uid() = seller_id)
 with check (auth.uid() = seller_id);
-
-create policy "buyer can cancel own pending offers"
-on public.offers for delete
-using (auth.uid() = buyer_id and status = 'pending');
 
 create policy "messages visible to participants"
 on public.messages for select
