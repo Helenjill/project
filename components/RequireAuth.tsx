@@ -32,7 +32,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
       setState('allowed');
     };
 
-    void check();
+    check();
   }, []);
 
   if (state === 'loading') {

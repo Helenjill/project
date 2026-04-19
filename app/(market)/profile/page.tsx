@@ -5,6 +5,7 @@ import RequireAuth from '@/components/RequireAuth';
 import { createClient } from '@/lib/supabase-browser';
 
 export default function ProfilePage() {
+  const bypassAuthInDev = process.env.NODE_ENV === 'development';
   const [profile, setProfile] = useState<any>(null);
   const [username, setUsername] = useState('');
   const [graduationYear, setGraduationYear] = useState('');
@@ -16,7 +17,18 @@ export default function ProfilePage() {
     const load = async () => {
       const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
+      if (!auth.user) {
+        if (bypassAuthInDev) {
+          const demoProfile = { username: 'demo_user', verification_status: 'verified', graduation_year: 2026 };
+          setProfile(demoProfile);
+          setUsername(demoProfile.username);
+          setGraduationYear(demoProfile.graduation_year.toString());
+          setActiveCount(2);
+          setSoldCount(1);
+          setLikedCount(5);
+        }
+        return;
+      }
 
       const [{ data: p }, { count: active }, { count: sold }, { count: liked }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', auth.user.id).single(),
@@ -33,13 +45,18 @@ export default function ProfilePage() {
       setLikedCount(liked ?? 0);
     };
     void load();
-  }, []);
+  }, [bypassAuthInDev]);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return;
+    if (!auth.user) {
+      if (bypassAuthInDev) {
+        setProfile((prev: any) => ({ ...(prev ?? {}), username, graduation_year: graduationYear ? Number(graduationYear) : null }));
+      }
+      return;
+    }
 
     await supabase
       .from('profiles')
@@ -48,6 +65,10 @@ export default function ProfilePage() {
   };
 
   const signOut = async () => {
+    if (bypassAuthInDev) {
+      window.location.href = '/';
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = '/auth';

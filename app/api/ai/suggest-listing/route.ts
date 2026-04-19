@@ -1,71 +1,49 @@
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { z } from 'zod';
+import OpenAI from "openai";
+import { NextResponse } from "next/server";
 
-const schema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-  category: z.string().min(1),
-  condition: z.string().min(1),
-  tags: z.array(z.string()).min(1)
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(req: Request) {
-  const formData = await req.formData();
-  const image = formData.get('image');
+  try {
+    const formData = await req.formData();
+    const image = formData.get("image");
 
-  if (!(image instanceof File)) {
-    return NextResponse.json({ error: 'Image is required.' }, { status: 400 });
-  }
-
-  const bytes = await image.arrayBuffer();
-  const base64 = Buffer.from(bytes).toString('base64');
-  const mime = image.type || 'image/jpeg';
-
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const response = await client.responses.create({
-    model: 'gpt-4.1-mini',
-    input: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: 'Analyze this item photo and return JSON with title, description, category, condition, and tags (array).'
-          },
-          {
-            type: 'input_image',
-            image_url: `data:${mime};base64,${base64}`
-            detail: 'auto'
-          }
-        ]
-      }
-    ],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'listing_suggestion',
-        schema: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            description: { type: 'string' },
-            category: { type: 'string' },
-            condition: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } }
-          },
-          required: ['title', 'description', 'category', 'condition', 'tags'],
-          additionalProperties: false
-        }
-      }
+    if (!(image instanceof File)) {
+      return NextResponse.json({ error: "Image is required." }, { status: 400 });
     }
-  });
 
-  const parsed = schema.safeParse(JSON.parse(response.output_text || '{}'));
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Could not parse model output' }, { status: 422 });
+    const bytes = await image.arrayBuffer();
+    const base64 = Buffer.from(bytes).toString("base64");
+    const mime = image.type || "image/jpeg";
+
+    const result = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Look at this item photo and return valid JSON with these keys only: title, description, category, condition, tags, suggestedPriceMin, suggestedPriceMax. Tags must be an array of short strings. suggestedPriceMin and suggestedPriceMax must be numbers in US dollars appropriate for a college marketplace. suggestedPriceMin must be less than or equal to suggestedPriceMax. Return JSON only.",
+            },
+            {
+              type: "input_image",
+              image_url: `data:${mime};base64,${base64}`,
+              detail: "auto",
+            },
+          ],
+        },
+      ],
+    });
+
+    return NextResponse.json({
+      text: result.output_text,
+    });
+  } catch (error) {
+    console.error("AI ROUTE ERROR:", error);
+    return NextResponse.json({ error: "AI failed" }, { status: 500 });
   }
-
-  return NextResponse.json(parsed.data);
 }
+

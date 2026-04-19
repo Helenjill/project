@@ -13,6 +13,11 @@ interface Draft {
   tags: string;
 }
 
+interface SuggestedPriceRange {
+  min: number;
+  max: number;
+}
+
 const initialDraft: Draft = {
   title: '',
   description: '',
@@ -24,6 +29,7 @@ const initialDraft: Draft = {
 export default function SellPage() {
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [price, setPrice] = useState('');
+  const [suggestedPriceRange, setSuggestedPriceRange] = useState<SuggestedPriceRange | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Venmo'>('Cash');
   const [meetupLocation, setMeetupLocation] = useState(MEETUP_SPOTS[0]);
   const [meetupNote, setMeetupNote] = useState('');
@@ -46,25 +52,68 @@ export default function SellPage() {
     }
 
     const data = await res.json();
+
+    let parsed;
+    try {
+      const cleaned = data.text
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      console.error('AI parse error:', data.text);
+      setStatus('AI response could not be parsed.');
+      return;
+    }
+
+    const min = Number(parsed.suggestedPriceMin);
+    const max = Number(parsed.suggestedPriceMax);
+    const hasValidRange =
+      Number.isFinite(min) &&
+      Number.isFinite(max) &&
+      min >= 0 &&
+      max >= 0 &&
+      min <= max;
+
     setDraft({
-      title: data.title ?? '',
-      description: data.description ?? '',
-      category: data.category ?? 'Other',
-      condition: data.condition ?? 'Good',
-      tags: (data.tags ?? []).join(', ')
+      title: parsed.title ?? '',
+      description: parsed.description ?? '',
+      category: parsed.category ?? 'Other',
+      condition: parsed.condition ?? 'Good',
+      tags: (parsed.tags ?? []).join(', ')
     });
+
+    if (hasValidRange) {
+      setSuggestedPriceRange({ min, max });
+      if (!price.trim()) {
+        const midpoint = (min + max) / 2;
+        setPrice(midpoint.toFixed(2));
+      }
+    } else {
+      setSuggestedPriceRange(null);
+    }
+
     setStatus('AI draft generated. You can edit everything before posting.');
   };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth.user;
-    if (!user) {
-      setStatus('Please sign in first.');
+
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+
+    if (authError) {
+      setStatus(authError.message ?? 'Could not verify your account.');
       return;
     }
+
+    if (!auth.user) {
+      setStatus('Please sign in to post a real listing.');
+      return;
+    }
+
+    const user = auth.user;
 
     const { data: listing, error } = await supabase
       .from('listings')
@@ -75,7 +124,10 @@ export default function SellPage() {
         price: Number(price || 0),
         category: draft.category,
         condition: draft.condition,
-        tags: draft.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        tags: draft.tags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
         meetup_location: meetupLocation,
         meetup_note: meetupNote || null,
         payment_method: paymentMethod,
@@ -93,9 +145,20 @@ export default function SellPage() {
       for (let i = 0; i < files.length; i += 1) {
         const file = files[i];
         const filePath = `${user.id}/${listing.id}/${Date.now()}-${i}-${file.name}`;
-        const upload = await supabase.storage.from('listing-images').upload(filePath, file);
-        if (upload.error) continue;
-        const { data } = supabase.storage.from('listing-images').getPublicUrl(filePath);
+
+        const upload = await supabase.storage
+          .from('listing-images')
+          .upload(filePath, file);
+
+        if (upload.error) {
+          console.error('Image upload error:', upload.error);
+          continue;
+        }
+
+        const { data } = supabase.storage
+          .from('listing-images')
+          .getPublicUrl(filePath);
+
         await supabase.from('listing_images').insert({
           listing_id: listing.id,
           image_url: data.publicUrl,
@@ -107,7 +170,9 @@ export default function SellPage() {
     setStatus('Listing posted!');
     setDraft(initialDraft);
     setPrice('');
+    setSuggestedPriceRange(null);
     setMeetupNote('');
+    setFiles(null);
   };
 
   return (
@@ -119,7 +184,12 @@ export default function SellPage() {
           <button type="button" className="bg-tulane-blue px-3 py-2 text-sm" onClick={runAi}>
             Generate with AI
           </button>
-          <input required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Title" />
+          <input
+            required
+            value={draft.title}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            placeholder="Title"
+          />
           <textarea
             required
             value={draft.description}
@@ -128,11 +198,36 @@ export default function SellPage() {
             rows={4}
           />
           <div className="grid grid-cols-2 gap-2">
-            <input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} placeholder="Category" />
-            <input value={draft.condition} onChange={(e) => setDraft({ ...draft, condition: e.target.value })} placeholder="Condition" />
+            <input
+              value={draft.category}
+              onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+              placeholder="Category"
+            />
+            <input
+              value={draft.condition}
+              onChange={(e) => setDraft({ ...draft, condition: e.target.value })}
+              placeholder="Condition"
+            />
           </div>
-          <input value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} placeholder="Tags (comma separated)" />
-          <input type="number" min="0" step="0.01" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" />
+          <input
+            value={draft.tags}
+            onChange={(e) => setDraft({ ...draft, tags: e.target.value })}
+            placeholder="Tags (comma separated)"
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            required
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Price"
+          />
+          {suggestedPriceRange && (
+            <p className="text-xs text-gray-600">
+              Suggested range: ${suggestedPriceRange.min.toFixed(2)} - ${suggestedPriceRange.max.toFixed(2)}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as 'Cash' | 'Venmo')}>
               <option>Cash</option>
@@ -144,7 +239,11 @@ export default function SellPage() {
               ))}
             </select>
           </div>
-          <input value={meetupNote} onChange={(e) => setMeetupNote(e.target.value)} placeholder="Custom meetup note (optional)" />
+          <input
+            value={meetupNote}
+            onChange={(e) => setMeetupNote(e.target.value)}
+            placeholder="Custom meetup note (optional)"
+          />
           <button type="submit" className="w-full bg-tulane-green px-3 py-2 text-white">
             Post Listing
           </button>

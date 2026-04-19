@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { Listing } from '@/lib/types';
 
 export default function LikesPage() {
+  const bypassAuthInDev = process.env.NODE_ENV === 'development';
   const [listings, setListings] = useState<Listing[]>([]);
 
   useEffect(() => {
@@ -14,7 +15,12 @@ export default function LikesPage() {
       const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
-      if (!user) return;
+      if (!user) {
+        if (bypassAuthInDev) {
+          setListings([]);
+        }
+        return;
+      }
 
       const { data } = await supabase
         .from('likes')
@@ -25,7 +31,7 @@ export default function LikesPage() {
       setListings(mapped);
     };
     void load();
-  }, []);
+  }, [bypassAuthInDev]);
 
   return (
     <RequireAuth>

@@ -13,6 +13,7 @@ interface MessageThread {
 }
 
 export default function InboxPage() {
+  const bypassAuthInDev = process.env.NODE_ENV === 'development';
   const [messages, setMessages] = useState<MessageThread[]>([]);
   const [body, setBody] = useState('');
   const [listingId, setListingId] = useState('');
@@ -20,7 +21,20 @@ export default function InboxPage() {
   const load = async () => {
     const supabase = createClient();
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return;
+    if (!auth.user) {
+      if (bypassAuthInDev) {
+        setMessages([
+          {
+            id: 'demo-1',
+            listing_id: 'demo-listing-1',
+            body: 'Hey! Is this still available?',
+            created_at: new Date().toISOString(),
+            listings: [{ title: 'Demo Listing' }]
+          }
+        ]);
+      }
+      return;
+    }
 
     const { data } = await supabase
       .from('messages')
@@ -39,7 +53,22 @@ export default function InboxPage() {
     e.preventDefault();
     const supabase = createClient();
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return;
+    if (!auth.user) {
+      if (bypassAuthInDev) {
+        setMessages((prev) => [
+          {
+            id: `demo-${Date.now()}`,
+            listing_id: listingId || 'demo-listing-1',
+            body,
+            created_at: new Date().toISOString(),
+            listings: [{ title: 'Demo Listing' }]
+          },
+          ...prev
+        ]);
+        setBody('');
+      }
+      return;
+    }
 
     const { data: listing } = await supabase.from('listings').select('seller_id').eq('id', listingId).single();
     if (!listing?.seller_id) return;

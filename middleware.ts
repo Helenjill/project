@@ -4,20 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export async function middleware(request: NextRequest) {
-  const url = request.nextUrl.clone();
-
-  // Magic links may still point at /home?code=... — send them through the server callback.
-  const code = url.searchParams.get('code');
-  if (code && !url.pathname.startsWith('/auth/callback')) {
-    const clean = url.clone();
-    clean.searchParams.delete('code');
-    const nextPath = `${clean.pathname}${clean.search}` || '/home';
-    const redirect = new URL('/auth/callback', request.url);
-    redirect.searchParams.set('code', code);
-    redirect.searchParams.set('next', nextPath.startsWith('/') ? nextPath : '/home');
-    return NextResponse.redirect(redirect);
-  }
-
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
