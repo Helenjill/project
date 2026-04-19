@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --fg: #0f172a;
+  --green: #006747;
+  --blue: #7db7e8;
+}
+
+* {
+  border-radius: 0 !important;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+body {
+  margin: 0;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+input,
+textarea,
+button,
+select {
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+}
+
+button {
+  cursor: pointer;
+}
+
+.card {
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
